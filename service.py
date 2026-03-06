@@ -12,7 +12,7 @@ CAT_FILTERS = "📦 ФИЛЬТРЫ"
 CAT_OILS = "🛢 МАСЛА И ЖИДКОСТИ"
 CAT_PARTS = "⚙️ ПРОЧИЕ ЗАПЧАСТИ"
 
-# Справочник: Артикул, Цена без НДС, Категория
+# Справочник ТМЦ
 PRICES = {
     "Масляный фильтр": ("4190001633", 758.33, CAT_FILTERS),
     "Фильтр топл. г.оч (рама)": ("4110001939068", 1300.00, CAT_FILTERS),
@@ -42,13 +42,12 @@ PRICES = {
 }
 
 def get_tmc_and_notes(h):
-    items = []
-    notes = []
-    if h > 0 and h % 1000 == 0: notes.append("🔧 ОБЯЗАТЕЛЬНО: Регулировка клапанов ДВС")
+    items, notes = [], []
+    if h > 0 and h % 1000 == 0: notes.append("🔧 Регулировка клапанов ДВС")
     if h % 250 == 0 or h == 100:
         items += [["Масляный фильтр", 2], ["Фильтр топл. г.оч (рама)", 2], ["Фильтр топл. г.оч (557)", 1], ["Фильтр топл. т.оч (555)", 1], ["Масло моторное (Grizzli), л", 30]]
     if h in [500, 1500, 2500, 3500, 4500, 5500]:
-        notes.append("💻 СЕРВИС: Диагностика и калибровка АКПП")
+        notes.append("💻 Диагностика и калибровка АКПП")
         items += [["Фильтр АКПП", 1], ["Масло АКПП (ATF), л", 35], ["Воздушный фильтр", 1], ["Масло М-8ДМ, л", 4], ["Смазка LX EP2, кг", 1.5]]
     if h in [1000, 2000, 3000, 4000, 5000, 6000]:
         items += [["Фильтр салона", 1], ["Фильтр кондиционера", 1], ["Воздушный фильтр", 1], ["Масло М-8ДМ, л", 4]]
@@ -61,7 +60,7 @@ def get_tmc_and_notes(h):
     return items, notes
 
 st.set_page_config(page_title="ChebTrade Аналитика", layout="wide")
-st.title("🚜 Калькулятор TCO ChebTrade: Анализ затрат и регламент")
+st.title("🚜 Аналитика затрат парка ChebTrade")
 
 with st.sidebar:
     st.header("⚙️ Управление")
@@ -75,10 +74,7 @@ if current_h == 0: current_h = 100
 vat_m = VAT_RATE if show_vat else 1.0
 
 # НАКОПИТЕЛЬНЫЙ РАСЧЕТ
-acc_tmc = 0
-acc_labor = 0
-cumulative_qty = {}
-
+acc_tmc, acc_labor, cumulative_qty = 0, 0, {}
 for h in range(100, current_h + 1, 50):
     if h in [100] or (h > 0 and h % 250 == 0):
         it, _ = get_tmc_and_notes(h)
@@ -88,7 +84,7 @@ for h in range(100, current_h + 1, 50):
         l_h = 26 if h % 6000 == 0 else (20 if h % 3000 == 0 else (12 if h % 500 == 0 else 6))
         acc_labor += l_h * labor_rate
 
-tele_cost = (current_h / HOURS_PER_MONTH) * TELEMETRY_MONTHLY if tele_on else 0
+tele_cost_acc = (current_h / HOURS_PER_MONTH) * TELEMETRY_MONTHLY if tele_on else 0
 
 # ТЕКУЩЕЕ ТО
 curr_tmc_it, curr_notes = get_tmc_and_notes(current_h)
@@ -97,39 +93,48 @@ curr_l_h = 26 if current_h % 6000 == 0 else (20 if current_h % 3000 == 0 else (1
 curr_lab_sum = curr_l_h * labor_rate
 
 st.divider()
-st.subheader("💰 Итоги затрат (на 1 машину)")
+# БЛОК 1: НА ОДНУ МАШИНУ
+st.subheader("👤 Затраты на 1 единицу техники")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Накоплено: ТМЦ", f"{acc_tmc * vat_m:,.0f} ₽")
 c2.metric("Накоплено: РАБОТЫ", f"{acc_labor * vat_m:,.0f} ₽")
-c3.metric("ВСЕГО (с телеметрией)", f"{(acc_tmc + acc_labor + tele_cost) * vat_m:,.0f} ₽")
-c4.metric("Телеметрия (итого)", f"{tele_cost * vat_m:,.0f} ₽")
+c3.metric("ВСЕГО (TCO)", f"{(acc_tmc + acc_labor + tele_cost_acc) * vat_m:,.0f} ₽")
+c4.metric("Телеметрия (итого)", f"{tele_cost_acc * vat_m:,.0f} ₽")
 
-st.info(f"📍 **Текущее ТО ({current_h} м.ч.):** ТМЦ — {curr_tmc_sum*vat_m:,.0f} ₽, Работы — {curr_lab_sum*vat_m:,.0f} ₽. Всего за заезд: **{(curr_tmc_sum+curr_lab_sum)*num_trucks*vat_m:,.0f} ₽** на парк.")
+# БЛОК 2: НА ВЕСЬ ПАРК (ТО, ЧТО ВЫ ПРОСИЛИ)
+st.subheader(f"🏢 ИТОГО ПО ВСЕМУ ПАРКУ ({num_trucks} машин)")
+f1, f2, f3 = st.columns(3)
+# Текущий заезд для парка
+f1.metric("ТМЦ (Текущее ТО)", f"{curr_tmc_sum * num_trucks * vat_m:,.0f} ₽")
+f2.metric("РАБОТЫ (Текущее ТО)", f"{curr_lab_sum * num_trucks * vat_m:,.0f} ₽")
+f3.metric("ИТОГО ЗА ТЕКУЩЕЕ ТО", f"{(curr_tmc_sum + curr_lab_sum) * num_trucks * vat_m:,.0f} ₽")
+
+f4, f5, f6 = st.columns(3)
+# Накопленные затраты для парка
+f4.metric("Накоплено: ТМЦ (Парк)", f"{acc_tmc * num_trucks * vat_m:,.0f} ₽")
+f5.metric("Накоплено: РАБОТЫ (Парк)", f"{acc_labor * num_trucks * vat_m:,.0f} ₽")
+f6.metric("ОБЩИЕ ЗАТРАТЫ ПАРКА", f"{(acc_tmc + acc_labor + tele_cost_acc) * num_trucks * vat_m:,.0f} ₽")
+
 if curr_notes: st.warning(" | ".join(curr_notes))
 
-# ТАБЛИЦА С АРТИКУЛАМИ И КАТЕГОРИЯМИ
-st.subheader(f"📋 Детализация ТМЦ на {current_h} м.ч.")
+# ДЕТАЛИЗАЦИЯ ТМЦ
+st.subheader(f"📋 Ведомость ТМЦ на {current_h} м.ч.")
 if curr_tmc_it:
     res = []
     for n, q in curr_tmc_it:
         art, pr, cat = PRICES[n]
         res.append({
-            "Категория": cat,
-            "Артикул": art,
-            "Наименование": n,
-            "Кол-во (на ТО)": q,
-            "Цена (ед)": pr * vat_m,
-            "Сумма (за ТО)": pr * q * vat_m,
-            "Всего потрачено (шт/л)": cumulative_qty.get(n, 0)
+            "Категория": cat, "Артикул": art, "Наименование": n, "Кол-во (ТО)": q,
+            "Цена (ед)": pr * vat_m, "Сумма (за ТО)": pr * q * vat_m, "Итого на ПАРК": pr * q * num_trucks * vat_m, "Всего потрачено (шт/л)": cumulative_qty.get(n, 0)
         })
     df = pd.DataFrame(res).sort_values(["Категория", "Наименование"])
     for cat in [CAT_FILTERS, CAT_OILS, CAT_PARTS]:
         df_c = df[df["Категория"] == cat]
         if not df_c.empty:
             st.write(f"### {cat}")
-            st.table(df_c.drop(columns="Категория").style.format("{:,.2f}", subset=["Цена (ед)", "Сумма (за ТО)"]))
+            st.table(df_c.drop(columns="Категория").style.format("{:,.2f}", subset=["Цена (ед)", "Сумма (за ТО)", "Итого на ПАРК"]))
 
 if current_h == 6000:
     st.write("---")
-    if not tele_on: st.error(f"🚨 КРИТИЧЕСКИЙ РИСК: Ремонт АКПП на 9000 м.ч. Бюджет: +{AKPP_REPAIR_BASE * num_trucks * vat_m:,.0f} ₽")
-    else: st.success("🟢 СТРАТЕГИЯ СИНЕРГИЯ: Ресурс агрегатов под защитой до 15000 м.ч.")
+    if not tele_on: st.error(f"🚨 РИСК: Ремонт АКПП на 9000 м.ч. Убыток парка: +{(AKPP_REPAIR_BASE * num_trucks * vat_m):,.0f} ₽")
+    else: st.success("🟢 СИНЕРГИЯ: Ресурс парка под защитой до 15000 м.ч.")
