@@ -1,3 +1,10 @@
+st.set_page_config(
+    page_title="ChebTrade-Synergy: Аналитика TCO",
+    page_icon="⚙️", # Здесь будет значок шестеренки во вкладке браузера
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 import streamlit as st
 import pandas as pd
 
@@ -138,3 +145,4 @@ if current_h == 6000:
     st.write("---")
     if not tele_on: st.error(f"🚨 РИСК: Ремонт АКПП на 9000 м.ч. Убыток парка: +{(AKPP_REPAIR_BASE * num_trucks * vat_m):,.0f} ₽")
     else: st.success("🟢 СИНЕРГИЯ: Ресурс парка под защитой до 15000 м.ч.")
+
